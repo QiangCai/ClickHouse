@@ -2991,7 +2991,6 @@ void FunctionArrayIntersect::executeImpl(Block & block, const ColumnNumbers & ar
         return;
     }
 
-    size_t rows = block.rows();
     size_t num_args = arguments.size();
 
     Columns preprocessed_columns(num_args);
@@ -3038,7 +3037,7 @@ void FunctionArrayIntersect::executeImpl(Block & block, const ColumnNumbers & ar
     }
 
     ColumnPtr result_column;
-    TypeListNumbers::for_each(SelectExecutor(arrays, return_type, result_column));
+    TypeListNumbers::forEach(SelectExecutor(arrays, return_type, result_column));
 
     block.getByPosition(result).column = std::move(result_column);
 }
