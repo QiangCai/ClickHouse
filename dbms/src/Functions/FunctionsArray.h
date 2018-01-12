@@ -1588,7 +1588,7 @@ private:
         void operator()(size_t index)
         {
             if (!result && typeid_cast<const DataTypeNumber<T> *>(data_type.get()))
-                result = executeNumber(arrays);
+                result = executeNumber<T>(arrays);
         }
     };
 
