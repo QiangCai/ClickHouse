@@ -20,7 +20,8 @@
 #include <tuple>
 #include <array>
 #include <DataTypes/DataTypeNothing.h>
-
+#include <DataTypes/getMostSubtype.h>
+#include <Core/TypeListNumber.h>
 
 namespace DB
 {
@@ -2930,6 +2931,197 @@ void FunctionArrayHasAllAny::executeImpl(Block & block, const ColumnNumbers & ar
     GatherUtils::sliceHas(*sources[0], *sources[1], all, *result_column_ptr);
 
     block.getByPosition(result).column = std::move(result_column);
+}
+
+/// Implementation of FunctionArrayIntersect.
+
+FunctionPtr FunctionArrayIntersect::create(const Context & context)
+{
+    return std::make_shared<FunctionArrayIntersect>(context);
+}
+
+String FunctionArrayIntersect::getName() const
+{
+    return name;
+}
+
+DataTypePtr FunctionArrayIntersect::getReturnTypeImpl(const DataTypes & arguments) const
+{
+    DataTypes nested_types;
+    nested_types.reserve(arguments.size());
+
+    bool has_nothing = false;
+
+    if (arguments.empty())
+        throw Exception{"Function " + getName() + " requires at least one argument.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
+
+    for (auto i : ext::range(0, arguments.size()))
+    {
+        auto array_type = typeid_cast<const DataTypeArray *>(arguments[i].get());
+        if (!array_type)
+            throw Exception("Argument " + std::to_string(i) + " for function " + getName() + " must be an array but it has type "
+                            + arguments[i]->getName() + ".", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        const auto & nested_type = array_type->getNestedType();
+
+        if (typeid_cast<const DataTypeNothing *>(nested_type.get()))
+            has_nothing = true;
+        else
+            nested_types.push_back(nested_type);
+    }
+
+    DataTypePtr result_type;
+
+    if (!nested_types.empty())
+        result_type = getMostSubtype(nested_types, true);
+
+    if (has_nothing)
+        return std::make_shared<DataTypeNothing>();
+
+    return std::make_shared<DataTypeArray>(result_type);
+}
+
+void FunctionArrayIntersect::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
+{
+    const DataTypePtr & return_type = block.getByPosition(result).type;
+
+    if (typeid_cast<const DataTypeNothing *>(return_type.get()))
+    {
+        block.getByPosition(result).column = return_type->createColumnConstWithDefaultValue(block.rows());
+        return;
+    }
+
+    size_t rows = block.rows();
+    size_t num_args = arguments.size();
+
+    Columns preprocessed_columns(num_args);
+
+    for (size_t i = 0; i < num_args; ++i)
+    {
+        const ColumnWithTypeAndName & arg = block.getByPosition(arguments[i]);
+        ColumnPtr preprocessed_column = arg.column;
+
+        if (!arg.type->equals(*return_type))
+            preprocessed_column = castColumn(arg, return_type, context);
+
+        preprocessed_columns[i] = std::move(preprocessed_column);
+    }
+
+    UnpackedArrays arrays;
+
+    arrays.is_const.assign(num_args, false);
+    arrays.null_maps.resize(num_args);
+    arrays.offsets.resize(num_args);
+    arrays.nested_columns.resize(num_args);
+
+    for (auto i : ext::range(0, num_args))
+    {
+        auto & argument_column = preprocessed_columns[i];
+        if (auto argument_column_const = typeid_cast<const ColumnConst *>(argument_column.get()))
+        {
+            arrays.is_const[i] = true;
+            argument_column = argument_column_const->getDataColumnPtr();
+        }
+
+        if (auto argument_column_array = typeid_cast<const ColumnArray *>(argument_column.get()))
+        {
+            arrays.offsets[i] = &argument_column_array->getOffsets();
+            arrays.nested_columns[i] = &argument_column_array->getData();
+            if (auto column_nullable = typeid_cast<const ColumnNullable *>(arrays.nested_columns[i]))
+            {
+                arrays.null_maps[i] = &column_nullable->getNullMapData();
+                arrays.nested_columns[i] = &column_nullable->getNestedColumn();
+            }
+        }
+        else
+            throw Exception{"Arguments for function " + getName() + " must be arrays.", ErrorCodes::LOGICAL_ERROR};
+    }
+
+    ColumnPtr result_column;
+    TypeListNumbers::for_each(SelectExecutor(arrays, return_type, result_column));
+
+    block.getByPosition(result).column = std::move(result_column);
+}
+
+template <typename T>
+ColumnPtr FunctionArrayIntersect::executeNumber(const UnpackedArrays & arrays) const
+{
+    using Map = ClearableHashMap<T, size_t, DefaultHash<T>, HashTableGrower<INITIAL_SIZE_DEGREE>,
+            HashTableAllocatorWithStackMemory<(1ULL << INITIAL_SIZE_DEGREE) * sizeof(T)>>;
+
+    auto args = arrays.nested_columns.size();
+    auto rows = arrays.offsets.front()->size();
+
+    bool has_nullable = false;
+
+    std::vector<const ColumnVector<T> *> columns;
+    columns.reserve(args);
+    for (auto arg : ext::range(0, args))
+    {
+        columns.push_back(typeid_cast<const ColumnVector<T> *>(arrays.nested_columns[arg]));
+        if (!columns.back())
+            throw Exception("Unexpected numeric array type for function " + getName(), ErrorCodes::LOGICAL_ERROR);
+
+        if (arrays.null_maps[arg])
+            has_nullable = true;
+    }
+
+    auto result_data_ptr = ColumnVector<T>::create();
+    auto & result_data = static_cast<ColumnVector<T> &>(result_data_ptr.get());
+    auto result_offsets_ptr = ColumnArray::ColumnOffsets::create(rows);
+    auto & result_offsets = static_cast<ColumnArray::ColumnOffsets &>(result_offsets_ptr.get());
+    NullMap null_map;
+
+    Map map;
+    std::vector<size_t> prev_off(args, 0);
+    size_t result_offset = 0;
+    for (auto row : ext::range(0, rows))
+    {
+        map.clear();
+
+        bool all_has_nullable = true;
+
+        for (auto arg : ext::range(0, args))
+        {
+            bool current_has_nullable = false;
+            size_t off = (*arrays.offsets[arg])[row];
+            for (auto i : ext::range(prev_off[arg], off))
+            {
+                if (arrays.null_maps[arg] && (*arrays.null_maps[arg])[row])
+                    current_has_nullable = true;
+                else
+                    ++map[columns[arg]->getElement(i)];
+            }
+
+            prev_off[arg] = off;
+            if (!current_has_nullable)
+                all_has_nullable = false;
+        }
+
+        if (all_has_nullable)
+        {
+            ++result_offset;
+            null_map.push_back(1);
+        }
+
+        for (const auto & pair : map)
+        {
+            if (pair.second == args)
+            {
+                ++result_offset;
+                result_data.insert(pair.first);
+                if (has_nullable)
+                    null_map.push_back(0);
+            }
+        }
+        result_offsets[row] = result_offset;
+    }
+
+    if (has_nullable)
+        result_data_ptr = ColumnNullable::create(result_data_ptr, null_map);
+
+    return ColumnArray::create(result_data_ptr, result_offsets_ptr);
+
 }
 
 }

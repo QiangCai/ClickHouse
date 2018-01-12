@@ -1540,6 +1540,64 @@ public:
     FunctionArrayPopBack() : FunctionArrayPop(false, name) {}
 };
 
+class FunctionArrayIntersect : public IFunction
+{
+public:
+    static constexpr auto name = "arrayIntersect";
+    static FunctionPtr create(const Context & context);
+    FunctionArrayIntersect(const Context & context) : context(context) {};
+
+    String getName() const override;
+
+    bool isVariadic() const override { return true; }
+    size_t getNumberOfArguments() const override { return 0; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override;
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+private:
+    const Context & context;
+
+    /// Initially allocate a piece of memory for 512 elements. NOTE: This is just a guess.
+    static constexpr size_t INITIAL_SIZE_DEGREE = 9;
+
+    struct UnpackedArrays
+    {
+        std::vector<char> is_const;
+        std::vector<const NullMap *> null_maps;
+        std::vector<const ColumnArray::ColumnOffsets::Container *> offsets;
+        ColumnRawPtrs nested_columns;
+    };
+
+    template <typename T>
+    ColumnPtr executeNumber(const UnpackedArrays & arrays) const;
+
+    struct SelectExecutor
+    {
+        const UnpackedArrays & arrays;
+        const DataTypePtr & data_type;
+        ColumnPtr & result;
+
+        SelectExecutor(const UnpackedArrays & arrays, const DataTypePtr & data_type, ColumnPtr & result)
+            : arrays(arrays), data_type(data_type), result(result) {}
+
+        template <typename T>
+        void operator()(size_t index)
+        {
+            if (!result && typeid_cast<const DataTypeNumber<T> *>(data_type.get()))
+                result = executeNumber(arrays);
+        }
+    };
+
+    /*
+    ColumnPtr executeString(const UnpackedArrays & arrays) const;
+    ColumnPtr executeGeneric(const UnpackedArrays & arrays) const;
+    */
+};
+
 class FunctionArrayHasAllAny : public IFunction
 {
 public:
