@@ -2984,6 +2984,12 @@ DataTypePtr FunctionArrayIntersect::getReturnTypeImpl(const DataTypes & argument
 void FunctionArrayIntersect::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result)
 {
     const DataTypePtr & return_type = block.getByPosition(result).type;
+    auto return_type_array = checkAndGetDataType<DataTypeArray>(return_type.get());
+
+    if (!return_type)
+        throw Exception{"Return type for function " + getName() + " must be array.", ErrorCodes::LOGICAL_ERROR};
+
+    const auto & nested_return_type = return_type_array->getNestedType();
 
     if (typeid_cast<const DataTypeNothing *>(return_type.get()))
     {
@@ -3037,7 +3043,7 @@ void FunctionArrayIntersect::executeImpl(Block & block, const ColumnNumbers & ar
     }
 
     ColumnPtr result_column;
-    TypeListNumbers::forEach(SelectExecutor(arrays, return_type, result_column));
+    TypeListNumbers::forEach(SelectExecutor(arrays, nested_return_type, result_column));
 
     block.getByPosition(result).column = std::move(result_column);
 }
