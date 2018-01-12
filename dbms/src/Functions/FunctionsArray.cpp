@@ -3043,7 +3043,7 @@ void FunctionArrayIntersect::executeImpl(Block & block, const ColumnNumbers & ar
     }
 
     ColumnPtr result_column;
-    TypeListNumbers::forEach(SelectExecutor(arrays, nested_return_type, result_column));
+    TypeListNumbers::forEach(SelectExecutor(arrays, removeNullable(nested_return_type), result_column));
 
     block.getByPosition(result).column = std::move(result_column);
 }
