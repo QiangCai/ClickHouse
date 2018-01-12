@@ -3120,7 +3120,7 @@ ColumnPtr FunctionArrayIntersect::executeNumber(const UnpackedArrays & arrays)
                     null_map.push_back(0);
             }
         }
-        result_offsets[row].getElement() = result_offset;
+        result_offsets.getElement(row) = result_offset;
     }
 
     ColumnPtr result_column = std::move(result_data_ptr);
