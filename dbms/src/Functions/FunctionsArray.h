@@ -1573,7 +1573,7 @@ private:
     };
 
     template <typename T>
-    static ColumnPtr executeNumber(const UnpackedArrays & arrays) const;
+    static ColumnPtr executeNumber(const UnpackedArrays & arrays);
 
     struct SelectExecutor
     {
