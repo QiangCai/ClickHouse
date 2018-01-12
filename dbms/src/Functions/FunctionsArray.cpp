@@ -3069,7 +3069,8 @@ ColumnPtr FunctionArrayIntersect::executeNumber(const UnpackedArrays & arrays)
     auto & result_data = static_cast<ColumnVector<T> &>(*result_data_ptr);
     auto result_offsets_ptr = ColumnArray::ColumnOffsets::create(rows);
     auto & result_offsets = static_cast<ColumnArray::ColumnOffsets &>(*result_offsets_ptr);
-    NullMap null_map;
+    auto null_map_column = ColumnUInt8::create();
+    NullMap & null_map = static_cast<ColumnUInt8 &>(*null_map_column).getData();
 
     Map map;
     std::vector<size_t> prev_off(args, 0);
@@ -3117,7 +3118,7 @@ ColumnPtr FunctionArrayIntersect::executeNumber(const UnpackedArrays & arrays)
     }
 
     if (has_nullable)
-        result_data_ptr = ColumnNullable::create(result_data_ptr, null_map);
+        result_data_ptr = ColumnNullable::create(result_data_ptr, null_map_column);
 
     return ColumnArray::create(result_data_ptr, result_offsets_ptr);
 
