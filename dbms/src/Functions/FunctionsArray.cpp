@@ -3120,14 +3120,13 @@ ColumnPtr FunctionArrayIntersect::executeNumber(const UnpackedArrays & arrays)
                     null_map.push_back(0);
             }
         }
-        result_offsets[row] = result_offset;
+        result_offsets[row].getElement() = result_offset;
     }
 
     ColumnPtr result_column = std::move(result_data_ptr);
     if (has_nullable)
         result_column = ColumnNullable::create(result_column, std::move(null_map_column));
     return ColumnArray::create(result_column, std::move(result_offsets_ptr));
-
 }
 
 }
