@@ -3117,10 +3117,8 @@ ColumnPtr FunctionArrayIntersect::executeNumber(const UnpackedArrays & arrays)
         result_offsets[row] = result_offset;
     }
 
-    if (has_nullable)
-        result_data_ptr = ColumnNullable::create(result_data_ptr, null_map_column);
-
-    return ColumnArray::create(result_data_ptr, result_offsets_ptr);
+    ColumnPtr result_column = has_nullable ? ColumnNullable::create(result_data_ptr, null_map_column) : result_data_ptr;
+    return ColumnArray::create(result_column, result_offsets_ptr);
 
 }
 
