@@ -2976,7 +2976,7 @@ DataTypePtr FunctionArrayIntersect::getReturnTypeImpl(const DataTypes & argument
         result_type = getMostSubtype(nested_types, true);
 
     if (has_nothing)
-        return std::make_shared<DataTypeNothing>();
+        result_type = std::make_shared<DataTypeNothing>();
 
     return std::make_shared<DataTypeArray>(result_type);
 }
