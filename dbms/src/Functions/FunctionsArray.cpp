@@ -2991,7 +2991,7 @@ void FunctionArrayIntersect::executeImpl(Block & block, const ColumnNumbers & ar
 
     const auto & nested_return_type = return_type_array->getNestedType();
 
-    if (typeid_cast<const DataTypeNothing *>(return_type.get()))
+    if (typeid_cast<const DataTypeNothing *>(nested_return_type.get()))
     {
         block.getByPosition(result).column = return_type->createColumnConstWithDefaultValue(block.rows());
         return;
