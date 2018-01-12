@@ -3117,10 +3117,10 @@ ColumnPtr FunctionArrayIntersect::executeNumber(const UnpackedArrays & arrays)
         result_offsets[row] = result_offset;
     }
 
-    ColumnPtr result_column = result_data_ptr;
+    ColumnPtr result_column = std::move(result_data_ptr);
     if (has_nullable)
-        result_column = ColumnNullable::create(result_column, null_map_column);
-    return ColumnArray::create(result_column, result_offsets_ptr);
+        result_column = ColumnNullable::create(result_column, std::move(null_map_column));
+    return ColumnArray::create(result_column, std::move(result_offsets_ptr));
 
 }
 
