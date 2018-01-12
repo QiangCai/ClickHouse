@@ -1584,8 +1584,8 @@ private:
         SelectExecutor(const UnpackedArrays & arrays, const DataTypePtr & data_type, ColumnPtr & result)
             : arrays(arrays), data_type(data_type), result(result) {}
 
-        template <typename T>
-        void operator()(size_t index)
+        template <typename T, size_t>
+        void operator()()
         {
             if (!result && typeid_cast<const DataTypeNumber<T> *>(data_type.get()))
                 result = executeNumber<T>(arrays);
