@@ -3043,7 +3043,7 @@ void FunctionArrayIntersect::executeImpl(Block & block, const ColumnNumbers & ar
 }
 
 template <typename T>
-ColumnPtr FunctionArrayIntersect::executeNumber(const UnpackedArrays & arrays) const
+ColumnPtr FunctionArrayIntersect::executeNumber(const UnpackedArrays & arrays)
 {
     using Map = ClearableHashMap<T, size_t, DefaultHash<T>, HashTableGrower<INITIAL_SIZE_DEGREE>,
             HashTableAllocatorWithStackMemory<(1ULL << INITIAL_SIZE_DEGREE) * sizeof(T)>>;
