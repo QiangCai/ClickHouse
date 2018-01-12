@@ -3093,7 +3093,7 @@ ColumnPtr FunctionArrayIntersect::executeNumber(const UnpackedArrays & arrays)
             size_t off = (*arrays.offsets[arg])[row];
             for (auto i : ext::range(prev_off[arg], off))
             {
-                if (arrays.null_maps[arg] && (*arrays.null_maps[arg])[row])
+                if (arrays.null_maps[arg] && (*arrays.null_maps[arg])[i])
                     current_has_nullable = true;
                 else
                     ++map[columns[arg]->getElement(i)];
