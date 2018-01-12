@@ -3059,16 +3059,16 @@ ColumnPtr FunctionArrayIntersect::executeNumber(const UnpackedArrays & arrays)
     {
         columns.push_back(typeid_cast<const ColumnVector<T> *>(arrays.nested_columns[arg]));
         if (!columns.back())
-            throw Exception("Unexpected numeric array type for function " + getName(), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Unexpected numeric array type for function arrayIntersect", ErrorCodes::LOGICAL_ERROR);
 
         if (arrays.null_maps[arg])
             has_nullable = true;
     }
 
     auto result_data_ptr = ColumnVector<T>::create();
-    auto & result_data = static_cast<ColumnVector<T> &>(result_data_ptr.get());
+    auto & result_data = static_cast<ColumnVector<T> &>(*result_data_ptr);
     auto result_offsets_ptr = ColumnArray::ColumnOffsets::create(rows);
-    auto & result_offsets = static_cast<ColumnArray::ColumnOffsets &>(result_offsets_ptr.get());
+    auto & result_offsets = static_cast<ColumnArray::ColumnOffsets &>(*result_offsets_ptr);
     NullMap null_map;
 
     Map map;
